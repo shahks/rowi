@@ -62,10 +62,11 @@ DynamicReconfigureGUI.prototype.change_callback = function(event) {
 
 }
 
-DynamicReconfigureGUI.prototype.menu_callback = function(event) {
+DynamicReconfigureGUI.prototype.menu_callback = function(node) { //function(event)
+  //console.log(event);
 
     if(this.client != null) {
-        if(this.name == event.data.node) {
+        if(this.name == node) { //event.data.node
             return;
         }
         this.client.close();
@@ -83,10 +84,10 @@ DynamicReconfigureGUI.prototype.menu_callback = function(event) {
     var config_callback = (this.config_callback).bind(this);
     var description_callback = (this.description_callback).bind(this);
 
-    this.name = event.data.node;
+    this.name = node; //event.data.node;
     this.client = new DynamicReconfigureClient({
         ros: this.ros,
-        name: event.data.node,
+        name: node, //event.data.node,
         config_callback: config_callback,
         description_callback: description_callback,
     });
@@ -95,12 +96,80 @@ DynamicReconfigureGUI.prototype.menu_callback = function(event) {
 DynamicReconfigureGUI.prototype.nodes_callback = function(nodes) {
     var self = this;
     var menu_callback = (this.menu_callback).bind(this);
-    var list = $('<ul>').appendTo(this.menu);
-    nodes.each(function(node) {
-        var i = $('<li><a href="#'+node+'">'+node+'</a></li>').appendTo(list);
-        i.on("click", { node: node}, menu_callback);
+    var div = $('<div id="container">').appendTo(this.menu);
+    //console.log(div);
+//    var list = $('<ul>').appendTo(div);
+
+
+    //var tree = div; //$("div[id=container]");
+    div.jstree({
+        'core': {
+            'check_callback': true,
+        }
     });
+    var tree = div.jstree();
+    //console.log(tree);
+
+    function split_ns(ns){
+      return ns.split('/');
+    }
+
+    function get_parent_ns(ns){
+      var res = ns.split('/').to(-1).join('/');
+      if(res.length > 0) {
+        return res;
+      } else {
+        return '/';
+      }
+    }
+
+    function get_last_ns(ns){
+      var abc = ns.split('/');
+      return abc[abc.length - 1];
+    }
+
+    function id_gen_ns(prefix,ns){
+      var abc = ns.split('/');
+      var suffix = abc.join('_');
+      return prefix.concat("_",suffix);
+    }
+
+    function get_tree_node(ns,action){
+      //console.log(ns);
+      if (ns == '/'){
+        return null;
+      }
+      var my_id = id_gen_ns("id",ns);
+      var res = tree.get_node(my_id);
+      if (res){
+        return res;
+      }
+      else{
+        var parent_ns = get_parent_ns(ns);
+        var parent = get_tree_node(parent_ns);
+        tree.create_node(parent,{
+          id: my_id,
+          action: action,
+          text: get_last_ns(ns),
+        });
+        return tree.get_node(my_id);
+      }
+    }
+
+    nodes.each(function(node) {
+        var abc = get_tree_node(node,node);
+        //var i = $('<li><a href="#'+node+'">'+node+'</a></li>').appendTo(div);
+        //i.on("click", { node: node}, menu_callback);
+
+    });
+
+     div.on('activate_node.jstree', function(e,data) {
+       if(data.node.original.action){
+         menu_callback(data.node.original.action);
+       }
+     });
 }
+
 
 DynamicReconfigureGUI.prototype.update_config_pane = function() {
     this.main.my("data", Object.clone(this.config));
